@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# SPDX-FileCopyrightText: 2026 Isaza Arenas
+# Iraca-2 — verificación adversarial y diferencial de ML-DSA (FIPS 204). Xiliux.
+[package]
+name = "iraca2"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Isaza Arenas"]
+description = "Verificación adversarial (abuso/malleability) y diferencial de ML-DSA-87 (FIPS 204)."
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+fips204 = { version = "0.4.6", features = ["ml-dsa-87"] }
+# El ÚNICO objetivo hoy: la implementación RustCrypto de FIPS 204 (la que consume
+# quipu). NO se depende de quipu (AGPL) para no contaminar la licencia del arnés.
+ml-dsa = "0.1.1"

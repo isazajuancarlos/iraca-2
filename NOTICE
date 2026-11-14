@@ -1,0 +1,9 @@
+Iraca-2 — verificación adversarial y diferencial de ML-DSA (FIPS 204).
+Copyright 2026 Isaza Arenas.
+
+Titularidad: Isaza Arenas. Xiliux no es persona jurídica.
+Licenciado bajo MIT OR Apache-2.0 (ver LICENSE-MIT y LICENSE-APACHE).
+
+Este arnés estudia, por su API pública, la implementación de ML-DSA de RustCrypto
+(crate `ml-dsa`, licencia Apache-2.0 OR MIT). No incorpora ni deriva su código; lo
+consume como dependencia para someterlo a pruebas de abuso. No depende de quipu.

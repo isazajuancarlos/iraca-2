@@ -1,160 +1,115 @@
-# iraca-2
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!-- Titularidad: Isaza Arenas. Xiliux no es persona jurídica. -->
 
-Adversarial and differential verification harness for ML-DSA (FIPS 204),
-the NIST post-quantum lattice signature standard. MIT OR Apache-2.0.  
-FIPS 204 · ML-DSA · differential oracle · malleability · hint canonicity
+# Iraca-2
 
-**English** · [Español](#español)
+**Verificación adversarial y diferencial de ML-DSA (FIPS 204), la firma lattice
+post-cuántica del NIST.**
 
----
+Hermano de [Iraca](../iraca) (que hace lo mismo con las firmas hash-based de la
+Lean roadmap de Ethereum). La tesis es la misma: el ecosistema ya cubre la
+**conformidad** (vectores KAT, entradas válidas) y la **interop**; nadie tiene
+como dueño la capa **adversarial** —qué hace `verify` ante lo que NO es una firma
+válida: firmas mutadas, codificaciones no canónicas, longitudes mal, mensajes o
+claves cruzados—. Un `verify` correcto las rechaza todas; una que acepte alguna
+es maleabilidad o algo peor.
 
-## The code is not hosted here
+## Qué mira, y por qué es el hueco
 
-Since August 2026 the source of this project **is not hosted on GitHub**, and it
-is not distributed through crates.io or any public registry.
+- **Conformidad** (cubierto por otros): los KAT de FIPS 204, que prueban entradas
+  válidas.
+- **Iraca-2** (el hueco): abuso y desacuerdo, en tres fases (las tres hechas y
+  medidas). Fase 1 — abuso de una sola implementación (`ml-dsa` de RustCrypto).
+  Fase 2 — **diferencial** entre `ml-dsa` y `fips204` (dos implementaciones
+  independientes del mismo estándar), cazando entradas que una acepta y la otra
+  rechaza. Fase 3 — **canonicidad profunda**: mutaciones estructurales del hint que
+  el barrido de bits no alcanza.
 
-This is not abandonment, not an incident, and there was no breach. It is a
-decision, and it is worth saying what it rests on. Through 2026 the package
-registries and code-hosting platforms were hit by sustained, chained
-supply-chain attacks — the Shai-Hulud worm, ChainDrop in August, malicious
-extensions that exfiltrated thousands of private repositories. For a
-cryptographic verification tool, hosting the source there stopped being a
-neutral decision.
+El foso: Xiliux ya opera **quipu**, una implementación conformante independiente,
+así que montar el diferencial cuesta lo que a nadie más.
 
-**The licence has not changed and the code is still available to anyone who
-asks** — delivered with a signature and a checksum, at no cost, with no NDA, no
-restriction on what you publish about it, and no expiry.
+## Fase 1 — medición (hecha)
 
-### Get the source
+`cargo run --release --example medir`
 
-Request the signed source via **[xiliux.com](https://xiliux.com)**.
+Objetivo: `ml-dsa` 0.1.1 (RustCrypto, ML-DSA-87), por su API pública sin modificar.
 
----
-
-## What it does
-
-The ecosystem covers **conformance** (FIPS 204 KAT vectors test valid inputs).
-What nobody owns is the **adversarial layer**: what does `verify` do with
-something that is _not_ a valid signature — a mutated signature, a non-canonical
-encoding, wrong lengths, crossed messages or keys? A correct `verify` rejects
-them all; one that accepts any of them is malleability or worse.
-
-Iraca-2 attacks ML-DSA in three phases, all measured:
-
-### Phase 1 — single-implementation abuse (`ml-dsa` 0.1.1, RustCrypto)
-
-| Campaign | Variants tested | Incorrectly accepted |
+| campaña | variantes | aceptadas indebidamente |
 |---|---|---|
-| Malleability (exhaustive 1-bit sweep over a valid signature) | 37,016 | **0** |
-| Structural abuse (zeros, ones, length, crossed message, crossed key) | 7 | **0** |
+| malleability (barrido exhaustivo de 1 bit sobre una firma válida) | 37 016 | **0** |
+| abuso estructural (ceros, unos, longitud, mensaje cruzado, clave cruzada) | 7 | **0** |
 
-Verdict: **SECO (dry)**. The bit-flip abuse surface is well-closed in this mature
-implementation. The probable finding lives in the differential (phase 2) and in
-the deep structural canonicity of the encoding.
+**Veredicto: SECO** — `verify` rechaza toda variante no canónica, mutada o ajena.
+Es un resultado honesto y esperado de una implementación madura: la capa de abuso
+de bit-flip está bien cerrada. El hallazgo probable NO vive aquí, vive en el
+**diferencial** (fase 2) y en la canonicidad profunda de la codificación (rangos
+de `z`, peso del *hint* `h`), que exigen construir codificaciones válidas-pero-no-
+canónicas, no solo invertir bits.
 
-### Phase 2 — differential `ml-dsa` ↔ `fips204`
+Control positivo (D33): la prueba `la_firma_valida_verifica` garantiza que el
+arnés no dice «0 aceptadas» por rechazarlo todo.
 
-Two fully independent implementations of FIPS 204 (`ml-dsa` by RustCrypto;
-`fips204` by integritychain), byte-compatible wire format (public key 2592 B,
-signature 4627 B). The same bytes are fed to both verifiers without translation.
+## Fase 2 — diferencial `ml-dsa` ↔ `fips204` (hecha)
 
-| Control / Campaign | Result |
+`cargo run --release --example medir` (imprime fase 1 y fase 2).
+
+Segunda implementación: `fips204` 0.4.6 (integritychain), código totalmente
+distinto de `ml-dsa` (otro NTT, otro muestreo, otra codificación). Las dos
+codificaciones son byte-compatibles por FIPS 204 (clave pública 2592 B, firma
+4627 B), así que los mismos bytes se dan a las dos puertas sin traducir; contexto
+vacío en ambas (variante «pura»).
+
+| control / campaña | resultado |
 |---|---|
-| Cross A→B (ml-dsa signs → fips204 verifies) | ✅ PASS |
-| Cross B→A (fips204 signs → ml-dsa verifies) | ✅ PASS |
-| Shared corpus (valid sig + 1-bit sweep + structural + crossed): **37,024 entries** | **0 disagreements** |
+| cruce A→B (ml-dsa firma → fips204 verifica) | **VERDE** |
+| cruce B→A (fips204 firma → ml-dsa verifica) | **VERDE** |
+| corpus compartido (firma válida + barrido exhaustivo de 1 bit + estructurales + mensaje/clave cruzados): 37 024 entradas | **0 desacuerdos** accept/reject |
 
-The two positive-control crosses make the "0 disagreements" credible: the
-implementations agree in what they accept _and_ in what they reject.
+**Veredicto: SECO** — las dos implementaciones conformes ACUERDAN en cada entrada
+del corpus. Los dos cruces de control en verde (D30) hacen creíble el «0
+desacuerdos»: no es que las implementaciones no se entiendan, es que coinciden
+también en lo que rechazan. El módulo `diferencial` es el arnés reutilizable
+(`verificar_fips`, `verificar_mldsa_desde_pk`, `campana_diferencial`).
 
-### Phase 3 — deep hint canonicity
+## Fase 3 — canonicidad profunda (hecha)
 
-FIPS 204 (Algorithm 21, `HintBitUnpack`) imposes explicit canonicity rules on
-the hint `h`: non-decreasing cumulative counts, counts `≤ ω`, strictly
-increasing indices per segment, and all-zero padding. A signature whose `h`
-violates a rule but still verifies is a second encoding of the same object —
-genuine malleability.
+`cargo run --release --example medir` (imprime las tres fases).
 
-7 structural variants tested (swapped indices, duplicate index, non-zero
-padding `0x03` / `0xFF`, cumulative count exceeding ω, decreasing count, `z`
-out-of-range). **0 accepted by either implementation; 0 disagreements.**
+El barrido de 1 bit de las fases 1 y 2 no puede construir codificaciones
+**válidas-pero-no-canónicas**: hay que decodificar la firma en sus tres partes
+(c̃ ‖ z ‖ h) y perturbar la ESTRUCTURA con cambios **multi-byte**. El módulo
+`canonicidad` ataca el *hint* `h`, cuya codificación es byte-alineada y a la que
+FIPS 204 (Algoritmo 21, `HintBitUnpack`) impone reglas de canonicidad explícitas:
+cuentas acumuladas no decrecientes y `≤ ω`, índices **estrictamente crecientes**
+por segmento, y relleno **todo ceros**. Una firma cuyo `h` viola una regla pero
+que aun así verifica es una segunda codificación del mismo objeto: maleabilidad.
 
-Verdict (all three phases): **SECO**. Both mature ML-DSA implementations are
-robust to structural non-canonicity, and they agree on every entry.
+Sobre la firma base (elegida por búsqueda hasta hallar un hint con un segmento de
+≥ 2 índices — control D30, sin él no hay qué reordenar) se prueban 7 variantes:
 
----
-
-## Español
-
-**[English](#iraca-2)** · Español
-
-Arnés de verificación adversarial y diferencial para ML-DSA (FIPS 204),
-la firma lattice post-cuántica del NIST. MIT OR Apache-2.0.  
-FIPS 204 · ML-DSA · oráculo diferencial · maleabilidad · canonicidad del hint
-
----
-
-### El código no se publica aquí
-
-Desde agosto de 2026, el código de este proyecto **no se aloja en GitHub**, ni
-se distribuye por crates.io ni ningún registro público.
-
-No es abandono ni un incidente: es una decisión. A lo largo de 2026 los
-registros de paquetes y las plataformas de código han sufrido ataques
-encadenados de cadena de suministro —Shai-Hulud, ChainDrop en agosto,
-extensiones maliciosas que se llevaron miles de repositorios privados—. Alojar
-aquí el código de una herramienta de verificación criptográfica dejó de ser una
-decisión neutra.
-
-**La licencia no cambia y el código se sigue entregando a quien lo pida**, con
-su firma y su suma de verificación, sin coste, sin NDA, sin restricción sobre lo
-que publique y sin caducidad.
-
-### Conseguir el código
-
-Solicite el fuente firmado en **[xiliux.com](https://xiliux.com)**.
-
----
-
-### Qué hace
-
-El ecosistema cubre la **conformidad** (vectores KAT de FIPS 204 sobre entradas
-válidas). Lo que nadie tiene como dueño es la capa **adversarial**: qué hace
-`verify` con lo que NO es una firma válida. Un `verify` correcto lo rechaza
-todo; uno que acepta algo es maleabilidad o algo peor.
-
-Iraca-2 ataca ML-DSA en tres fases, todas medidas:
-
-### Fase 1 — abuso de una implementación (`ml-dsa` 0.1.1, RustCrypto)
-
-| Campaña | Variantes probadas | Aceptadas indebidamente |
+| variante no canónica | por qué es no canónica | resultado |
 |---|---|---|
-| Malleability (barrido exhaustivo de 1 bit sobre una firma válida) | 37 016 | **0** |
-| Abuso estructural (ceros, unos, longitud, mensaje cruzado, clave cruzada) | 7 | **0** |
+| dos índices intercambiados | orden no creciente; mismo conjunto de índices (maleabilidad genuina, verificada: multiset idéntico) | rechazada por ambas |
+| índice duplicado | no estrictamente creciente | rechazada por ambas |
+| relleno no nulo `0x03` / `0xFF` | FIPS 204 exige relleno cero; valores multi-bit que un flip de 1 bit no alcanza | rechazada por ambas |
+| cuenta acumulada final `> ω` | `y[ω+i] > ω` | rechazada por ambas |
+| cuenta acumulada decreciente | `y[ω+i] < Index` | rechazada por ambas |
+| `z` fuera de rango (`w=0 ⇒ z=γ₁`) | `‖z‖∞ ≥ γ₁ − β`, cazado por el chequeo de norma | rechazada por ambas |
 
-**Veredicto: SECO.** La superficie de abuso por bit-flip está bien cerrada.
+**Veredicto: SECO** — **0 aceptadas por ninguna** de las dos implementaciones y
+**0 desacuerdos**; los dos controles positivos (firma base verifica en ml-dsa y en
+fips204) en verde, y estructura de hint suficiente confirmada (D30). El detector de
+aceptación y el de desacuerdo se prueban con parejas que fabrican una aceptación /
+un rechazo cruzado (D33), para que el «0» no sea el de un arnés ciego.
 
-### Fase 2 — diferencial `ml-dsa` ↔ `fips204`
+**Sobre `z`**: su codificación `BitPack(z, γ₁−1, γ₁)` es una biyección sobre el
+rango válido (20 bits por coeficiente, sin espacio para dos representantes de un
+mismo valor mod q), así que no hay «representante equivalente»: el único abuso es
+un coeficiente fuera de rango, y lo caza la norma de `verify`. La hipótesis de la
+fase 2 —«el hallazgo probable vive en la estructura, no en el bit»— queda
+**refutada** para estas dos implementaciones: las dos son robustas también a la
+no-canonicidad estructural.
 
-Dos implementaciones completamente independientes de FIPS 204, con formato de
-wire byte-compatible.
+## Licencia
 
-| Control / Campaña | Resultado |
-|---|---|
-| Cruce A→B (ml-dsa firma → fips204 verifica) | ✅ VERDE |
-| Cruce B→A (fips204 firma → ml-dsa verifica) | ✅ VERDE |
-| Corpus compartido (firma válida + barrido + estructurales + cruzados): **37 024 entradas** | **0 desacuerdos** |
-
-### Fase 3 — canonicidad profunda del hint
-
-7 variantes estructurales del hint `h` (índices intercambiados, índice duplicado,
-relleno no nulo, cuenta acumulada `> ω`, cuenta decreciente, `z` fuera de rango).
-**0 aceptadas por ninguna implementación; 0 desacuerdos.**
-
-**Veredicto (tres fases): SECO.** Las dos implementaciones maduras de ML-DSA son
-robustas al abuso estructural y coinciden en cada entrada del corpus.
-
----
-
-*iraca-2* — © 2026 Juan Carlos Isaza. Licence: **MIT OR Apache-2.0**.  
-La licencia no cambia: lo que cambia es cómo se entrega el código.
+MIT OR Apache-2.0. No depende de quipu (AGPL); consume `ml-dsa` (Apache/MIT).
